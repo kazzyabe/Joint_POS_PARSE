@@ -1,0 +1,7 @@
+conllu-perceptron-tagger
+UD_English-EWT
+*.log
+*.conllu
+*.dat
+__pycache__
+graph-parser
