@@ -194,82 +194,7 @@ class PerceptronWeighter():
             print("Maxspan", file=sys.stderr)
             M = maxspan(V,E)
             print(M, file=sys.stderr)
-            '''
-            ###### Guessing weights ##############
-            E = []
-            context = self.START + [self._normalise(w[1]) for w in trimed_sentence] + self.END
-            for i in range(0, len(V)):
-                for j in range(i + 1, len(V)):
-                    # print((i,j), file=sys.stderr)
-                    dep = j
-                    head = i
-                    token = trimed_sentence[j-1]
-                    depWord = token[1]
-                    depPOS = token[3]
-                    # head info
-                    if i == 0:
-                        headWord = "ROOT"
-                        headPOS = "ROOT"
-                    else:
-                        h_token = trimed_sentence[i-1]
-                        headWord = h_token[1]
-                        headPOS = h_token[3]
-
-                    # prev retrieval
-                    if j == 1:
-                        prev = "ROOT"
-                        prev2 = "START"
-                    elif j == 2:
-                        prev = trimed_sentence[j-2][3]
-                        prev2 = "ROOT"
-                    else:
-                        prev = trimed_sentence[j-2][3]
-                        prev2 = trimed_sentence[j-3][3]
-
-                    # get features
-                    feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
-                    # print(feats)
-                    guess = self.model.predict(feats)
-
-                    e_tmp =[head, dep, guess]
-                    E.append(e_tmp)
-                    # F[(head,dep)] = feats
-                if i >= 2:
-                    for j in range(1,i):
-                        dep = j
-                        head = i
-                        token = trimed_sentence[j-1]
-                        depWord = token[1]
-                        depPOS = token[3]
-
-                        # head info
-                        h_token = trimed_sentence[i-1]
-                        headWord = h_token[1]
-                        headPOS = h_token[3]
-
-                        # prev retrieval
-                        if j == 1:
-                            prev = "ROOT"
-                            prev2 = "START"
-                        elif j == 2:
-                            prev = trimed_sentence[j-2][3]
-                            prev2 = "ROOT"
-                        else:
-                            prev = trimed_sentence[j-2][3]
-                            prev2 = trimed_sentence[j-3][3]
-
-                        # get features
-                        feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
-                        # print(feats)
-                        guess = self.model.predict(feats)
-
-                        e_tmp =[head, dep, guess]
-                        E.append(e_tmp)
-            print(V, file=sys.stderr)
-            print(E, file=sys.stderr)
-            M = maxspan(V,E)
-            print("M ===================\n", M, file=sys.stderr)
-            '''
+            
             if M:
                 print("#\n#", file=sys.stdout)
             for token in sentence:
@@ -295,7 +220,9 @@ class PerceptronWeighter():
                             p_str = ""
                             i = 0
                             while i < len(token):
-                                if i == 6:
+                                if i == 3:
+                                    tmp = guessed_tags[dep]
+                                elif i == 6:
                                     tmp = str(m[0])
                                     # print(tmp, file=sys.stderr)
                                 else:
