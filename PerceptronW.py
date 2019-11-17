@@ -28,26 +28,59 @@ class AveragedPerceptron(object):
         self._tstamps = defaultdict(int)
         # Number of instances seen
         self.i = 0
-
-    def predict(self, features):
+    
+    def POS_predict(self, features):
+        '''Dot-product the features and current weights and return the best label.'''
+        scores = defaultdict(float)
+        for feat, value in features.items():
+            if feat not in self.weights or value == 0:
+                continue
+            weights = self.weights[feat]
+            for label, weight in weights.items():
+                scores[label] += value * weight
+        # Do a secondary alphabetic sort, for stability
+        # print(scores)
+        return max(self.classes, key=lambda label: (scores[label], label))
+        
+    def predict(self, features, depPOS):
         '''Dot-product the features and current weights and return the best label.'''
         score = 0
         for feat, value in features.items():
             if feat not in self.weights or value == 0:
                 continue
-            weight = self.weights[feat]
-            score += value * weight
+            weights = self.weights[feat]
+            if depPOS in weights:
+                score += value * weights[depPOS]
+            # weight = self.weights[feat]
+            # score += value * weight
         # Do a secondary alphabetic sort, for stability
         # return max(self.classes, key=lambda label: (scores[label], label))
         return score
 
-    def update(self, gold, guessed):# features, val):
+    def POS_update(self, truth, guess, features):
         '''Update the feature weights.'''
-        def upd_feat(f, w, v):
-            param = (f)
+        def upd_feat(c, f, w, v):
+            param = (f, c)
             self._totals[param] += (self.i - self._tstamps[param]) * w
             self._tstamps[param] = self.i
-            self.weights[f] = w + v
+            self.weights[f][c] = w + v
+
+        self.i += 1
+        if truth == guess:
+            return None
+        for f in features:
+            weights = self.weights.setdefault(f, {})
+            upd_feat(truth, f, weights.get(truth, 0.0), 1.0)
+            upd_feat(guess, f, weights.get(guess, 0.0), -1.0)
+        return None
+
+    def update(self, gold, guessed, truth, guessPOS):# features, val):
+        '''Update the feature weights.'''
+        def upd_feat(c, fe, w, v):
+            param = (fe,c)
+            self._totals[param] += (self.i - self._tstamps[param]) * w
+            self._tstamps[param] = self.i
+            self.weights[fe][c] = w + v
         # def upd_feat(c, f, w, v):
         #     param = (f, c)
         #     self._totals[param] += (self.i - self._tstamps[param]) * w
@@ -62,16 +95,28 @@ class AveragedPerceptron(object):
         # if gold not in guess, increase gold
         for g in gold:
             if not (g in guessed):
-                weight = self.weights.setdefault(g, random.random())
-                upd_feat(g, weight, 1)
+                # weight = self.weights.setdefault(g, random.random())
+                weights = self.weights.setdefault(g, {})
+                weight = weights.get(guessPOS, random.random())
+                # print("depPOS, g, weight, 1 ================\n",(guessPOS, g, weight, 1))
+                upd_feat(guessPOS, g, weight, 1)
+                ## truth
+                weight = weights.get(truth, random.random())
+                # print("depPOS, g, weight, 1 ================\n",(truth, g, weight, 1))
+                upd_feat(truth, g, weight, 1)
             # else:
                 # c += 1
             # n += 1
         # if guessed not in gold, decrease guess
         for guess in guessed:
             if not (guess in gold):
-                weight = self.weights.setdefault(guess, random.random())
-                upd_feat(guess, weight, -1)
+                # weight = self.weights.setdefault(guess, random.random())
+                weights = self.weights.setdefault(guess, {})
+                weight = weights.get(guessPOS, random.random())
+                upd_feat(guessPOS,guess, weight, -1)
+                ##truth
+                weight = weights.get(truth, random.random())
+                upd_feat(truth,guess, weight, -1)
 
         # if truth == guess:
         #     return None
@@ -83,25 +128,25 @@ class AveragedPerceptron(object):
 
     def average_weights(self):
         '''Average weights from all iterations.'''
-        new_feat_weight = {}
-        for feat, weight in self.weights.items():
-            param = (feat)
-            total = self._totals[param]
-            total += (self.i - self._tstamps[param]) * weight
-            averaged = round(total / float(self.i), 3)
-            if averaged:
-                new_feat_weight[feat] = averaged
-        self.weights = new_feat_weight
-        # for feat, weights in self.weights.items():
-        #     new_feat_weights = {}
-        #     for clas, weight in weights.items():
-        #         param = (feat, clas)
-        #         total = self._totals[param]
-        #         total += (self.i - self._tstamps[param]) * weight
-        #         averaged = round(total / float(self.i), 3)
-        #         if averaged:
-        #             new_feat_weights[clas] = averaged
-        #     self.weights[feat] = new_feat_weights
+        # new_feat_weight = {}
+        # for feat, weight in self.weights.items():
+        #     param = (feat)
+        #     total = self._totals[param]
+        #     total += (self.i - self._tstamps[param]) * weight
+        #     averaged = round(total / float(self.i), 3)
+        #     if averaged:
+        #         new_feat_weight[feat] = averaged
+        # self.weights = new_feat_weight
+        for feat, weights in self.weights.items():
+            new_feat_weights = {}
+            for clas, weight in weights.items():
+                param = (feat, clas)
+                total = self._totals[param]
+                total += (self.i - self._tstamps[param]) * weight
+                averaged = round(total / float(self.i), 3)
+                if averaged:
+                    new_feat_weights[clas] = averaged
+            self.weights[feat] = new_feat_weights
         return None
 
     def save(self, path):

@@ -228,10 +228,10 @@ def trainer(corpus_file, model_file):
 
 	t.train(sentences, save_loc=model_file, nr_iter=5)
 
-if len(sys.argv) == 3 and sys.argv[1] == '-t':
-	trainer(sys.stdin, sys.argv[2])	
-elif len(sys.argv) == 2:
-	tagger(sys.stdin, sys.argv[1])
-else:
-	print('tagger.py [-t] model.dat');
-	sys.exit(-1)
+# if len(sys.argv) == 3 and sys.argv[1] == '-t':
+# 	trainer(sys.stdin, sys.argv[2])	
+# elif len(sys.argv) == 2:
+# 	tagger(sys.stdin, sys.argv[1])
+# else:
+# 	print('tagger.py [-t] model.dat');
+# 	sys.exit(-1)

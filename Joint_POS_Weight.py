@@ -2,7 +2,7 @@ import sys
 
 sys.path.insert(0, "conllu-perceptron-tagger")
 sys.stderr = open("debugg.log", "w")
-# sys.stdout = open("train_result20mod2.conllu", "w")
+sys.stdout = open("parsed.conllu", "w")
 # sys.stdout = open("feat.log", "w")
 
 import random
@@ -12,9 +12,10 @@ import pickle
 from PerceptronW import AveragedPerceptron
 from copy import copy
 from MaximumSpanning import maxspan
+from tagger import PerceptronTagger
 
 def _pc(n, d):
-	return (float(n) / d) * 100
+    return (float(n) / d) * 100
 
 class PerceptronWeighter():
     '''Greedy Averaged Perceptron weighter, inspired by Matthew Honnibal.
@@ -28,13 +29,18 @@ class PerceptronWeighter():
     START = ['-START-', 'ROOT']
     END = ['-END-', '-END2-']
 
-    def __init__(self, fname, load=True):
+    def __init__(self, fname, load=False):
+        # self.tagger = PerceptronTagger(tagfile, load=False)
         self.model = AveragedPerceptron()
         self.tagdict = {}
         self.classes = set()
         self.model_file = fname
+        # self.tag_file = tagfile
         if load:
             self.load(self.model_file)
+        print("Classes ==============\n",self.classes, file=sys.stderr)
+        # if tagload:
+        #     self.tagger.load(self.tag_file)
 
     def parse(self, corpus, tokenise=False):
         '''Tags a string `corpus`.'''
@@ -58,6 +64,137 @@ class PerceptronWeighter():
                 V.append(int(token[0]))
                 trimed_sentence.append(token)
             
+            E = []
+            F = {}
+            context = self.START + [self._normalise(w[1]) for w in trimed_sentence] + self.END
+            print("context ============\n", context, file=sys.stderr)
+            tags = [w[3] for w in sentence]
+            guessed_tags = {}
+            POS_feats = {}
+            for i in range(0, len(V)):
+                for j in range(i + 1, len(V)):
+                    print((i,j), file=sys.stderr)
+                    dep = j
+                    head = i
+                    token = trimed_sentence[j-1]
+                    depWord = token[1]
+                    ########## depPOS = token[3]
+                    
+                    # head info
+                    if i == 0:
+                        headWord = "ROOT"
+                        headPOS = "ROOT"
+                    else:
+                        h_token = trimed_sentence[i-1]
+                        headWord = h_token[1]
+                        headPOS = guessed_tags[head]
+
+                    # prev retrieval
+                    if j == 1:
+                        prev = "ROOT"
+                        prev2 = "START"
+                    elif j == 2:
+                        prev = guessed_tags[j-1]
+                        prev2 = "ROOT"
+                    else:
+                        prev = guessed_tags[j-1]
+                        prev2 = guessed_tags[j-2]
+
+                    ########### depPOS
+                    depPOS = self.tagdict.get(depWord)
+                    # print("depPOS and word ==============\n", depPOS, depWord, file=sys.stderr)
+                    if not depPOS:
+                        depPOS = guessed_tags.setdefault(j, "current")
+                        # print("TAGdict =========Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                        if depPOS == "current":
+                            fPOS = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                            print("fPOS =================================\n", fPOS, file=sys.stderr)
+                            depPOS = self.model.POS_predict(fPOS)
+                            # print("Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                            guessed_tags[dep] = depPOS
+                            POS_feats[dep] = fPOS
+                    else:
+                        guessed_tags[dep] = depPOS
+                    # print("guessed_tags =============\n", guessed_tags, file=sys.stderr)
+                    # break
+                    # get features
+                    feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                    # print(feats)
+                    guess = self.model.predict(feats, depPOS)
+
+                    e_tmp =[head, dep, guess]
+                    E.append(e_tmp)
+                    F[(head,dep)] = feats
+                if i >= 2:
+                    for j in range(1,i):
+                        print((i,j), file=sys.stderr)
+                        dep = j
+                        head = i
+                        token = trimed_sentence[j-1]
+                        depWord = token[1]
+                        ########## depPOS = token[3]
+                        
+                        # head info
+                        if i == 0:
+                            headWord = "ROOT"
+                            headPOS = "ROOT"
+                        else:
+                            h_token = trimed_sentence[i-1]
+                            headWord = h_token[1]
+                            headPOS = guessed_tags[head]
+
+                        # prev retrieval
+                        if j == 1:
+                            prev = "ROOT"
+                            prev2 = "START"
+                        elif j == 2:
+                            prev = guessed_tags[j-1]
+                            prev2 = "ROOT"
+                        else:
+                            prev = guessed_tags[j-1]
+                            prev2 = guessed_tags[j-2]
+
+                        ########### depPOS
+                        depPOS = self.tagdict.get(depWord)
+                        # print("depPOS and word ==============\n", depPOS, depWord, file=sys.stderr)
+                        if not depPOS:
+                            depPOS = guessed_tags.setdefault(j, "current")
+                            # print("TAGdict =========Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                            if depPOS == "current":
+                                fPOS = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                                # print("fPOS =================================\n", fPOS, file=sys.stderr)
+                                depPOS = self.model.POS_predict(fPOS)
+                                # print("Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                                guessed_tags[dep] = depPOS
+                                POS_feats[dep] = fPOS
+                        else:
+                            guessed_tags[dep] = depPOS
+                        # print("guessed_tags =============\n", guessed_tags, file=sys.stderr)
+                        # break
+                        # get features
+                        feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                        # print(feats)
+                        guess = self.model.predict(feats, depPOS)
+
+                        e_tmp =[head, dep, guess]
+                        E.append(e_tmp)
+                        F[(head,dep)] = feats
+                        
+            # print("Gold V =================", file=sys.stderr)
+            # print(G_V, file=sys.stderr)
+            # print("Gold E =================", file=sys.stderr)
+            # print(G_E, file=sys.stderr)
+            # print("V ======================", file=sys.stderr)
+            # print(V, file=sys.stderr)
+            # print("E ======================", file=sys.stderr)
+            # print(E, file=sys.stderr)
+            # print("F =====================", file=sys.stderr)
+            # print(F, file=sys.stderr)
+            # print("==============================================================", file=sys.stderr)
+            print("Maxspan", file=sys.stderr)
+            M = maxspan(V,E)
+            print(M, file=sys.stderr)
+            '''
             ###### Guessing weights ##############
             E = []
             context = self.START + [self._normalise(w[1]) for w in trimed_sentence] + self.END
@@ -132,6 +269,7 @@ class PerceptronWeighter():
             print(E, file=sys.stderr)
             M = maxspan(V,E)
             print("M ===================\n", M, file=sys.stderr)
+            '''
             if M:
                 print("#\n#", file=sys.stdout)
             for token in sentence:
@@ -168,48 +306,6 @@ class PerceptronWeighter():
                             print(p_str, file=sys.stdout)
             if M:
                 print("", file=sys.stdout)
-            # break
-            
-        # sentence = []
-#         line = corpus.readline()
-        
-#         while reading:
-#             if line == '\n':
-#                 # sentence boundary
-#                 prev, prev2 = self.START
-# #                print('s:',sentence)
-#                 for words in sentence:    
-#                     context = self.START + [self._normalise(w[1]) for w in sentence] + self.END
-#                     for i, token in enumerate(sentence):
-#                         tag = self.tagdict.get(token[1])
-#                         if not tag:
-#                             # if the word isn't "unambiguous", extract features
-#                             features = self._get_features(i, token[1], context, prev, prev2)
-#                             # make the prediction
-#                             tag = self.model.predict(features)
-#                         sentence[i][3] = tag
-#                         prev2 = prev
-#                         prev = tag
-#                 # print out the tokens and their tags
-#                 for words in sentence:    
-#                     print('\t'.join(words))
-#                 print()
-#                 sentence = []    
-#             elif line == '':
-#                 # we reached the end of the input
-#                 reading = False
-#             elif line[0] == '#':
-#                 # line is a comment line
-#                 print(line.strip())
-#                 line = corpus.readline()
-#                 continue
-#             else:
-#                 # normal conllu line
-#                 row = line.strip().split('\t')
-#                 sentence.append(row)
-                
-#             # read the next line
-#             line = corpus.readline()
 
         return 
 
@@ -218,7 +314,7 @@ class PerceptronWeighter():
         predict weights for a graph
         '''
 
-    def train(self, sentences, save_loc=None, nr_iter=5):
+    def train(self, sentences, tag_loc=None, save_loc=None, nr_iter=5):
         '''Train a model from sentences, and save it at ``save_loc``. ``nr_iter``
         controls the number of Perceptron training iterations.
 
@@ -227,6 +323,10 @@ class PerceptronWeighter():
         :param nr_iter: Number of training iterations.
         '''
         # self._make_tagdict(sentences)
+        self._make_tagdict(sentences)
+        self.model.classes = self.classes
+        # print("classes =============\n", self.classes)
+        # print("tagdict======================\n",self.tagdict)
         # self.model.classes = self.classes
         for iter_ in range(nr_iter):
             c = 0
@@ -237,8 +337,6 @@ class PerceptronWeighter():
                 print(n, end='', file=sys.stderr)
                 print("sentence =============", file=sys.stderr)
                 print(sentence, file=sys.stderr)
-                # prev, prev2 = self.START
-                # context = self.START + [self._normalise(w[1]) for w in sentence] + self.END
 
                 ###### Gold tree #######
                 G_V = [0]
@@ -252,24 +350,19 @@ class PerceptronWeighter():
                     # print(dependent)
                     head = int(token[6])
 
-                    # headPOS = sentence[head-1][3]
-                    # headW = sentence[head-1][1]
-
-                    # feats = self._get_features(dependent - 1, depWord, context, prev, prev2, headPOS, headW, depPOS)
-                    # guess = self.model.predict(feats)
-
                     G_V.append(dependent)
                     e_tmp =(head, dependent)
                     G_E.append(e_tmp)
-
-                    # prev2 = prev
-                    # prev = depPOS
                 
                 ###### Guessing weights ##############
                 V = copy(G_V)
                 E = []
                 F = {}
                 context = self.START + [self._normalise(w[1]) for w in trimed_sentence] + self.END
+                print("context ============\n", context, file=sys.stderr)
+                tags = [w[3] for w in sentence]
+                guessed_tags = {}
+                POS_feats = {}
                 for i in range(0, len(V)):
                     for j in range(i + 1, len(V)):
                         print((i,j), file=sys.stderr)
@@ -277,7 +370,8 @@ class PerceptronWeighter():
                         head = i
                         token = trimed_sentence[j-1]
                         depWord = token[1]
-                        depPOS = token[3]
+                        ########## depPOS = token[3]
+                        
                         # head info
                         if i == 0:
                             headWord = "ROOT"
@@ -285,89 +379,163 @@ class PerceptronWeighter():
                         else:
                             h_token = trimed_sentence[i-1]
                             headWord = h_token[1]
-                            headPOS = h_token[3]
+                            headPOS = guessed_tags[head]
 
                         # prev retrieval
                         if j == 1:
                             prev = "ROOT"
                             prev2 = "START"
                         elif j == 2:
-                            prev = trimed_sentence[j-2][3]
+                            prev = guessed_tags[j-1]
                             prev2 = "ROOT"
                         else:
-                            prev = trimed_sentence[j-2][3]
-                            prev2 = trimed_sentence[j-3][3]
+                            prev = guessed_tags[j-1]
+                            prev2 = guessed_tags[j-2]
 
+                        ########### depPOS
+                        depPOS = self.tagdict.get(depWord)
+                        # print("depPOS and word ==============\n", depPOS, depWord, file=sys.stderr)
+                        if not depPOS:
+                            depPOS = guessed_tags.setdefault(j, "current")
+                            # print("TAGdict =========Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                            if depPOS == "current":
+                                fPOS = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                                # print("fPOS =================================\n", fPOS, file=sys.stderr)
+                                depPOS = self.model.POS_predict(fPOS)
+                                # print("Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                                guessed_tags[dep] = depPOS
+                                POS_feats[dep] = fPOS
+                        else:
+                            guessed_tags[dep] = depPOS
+                        # print("guessed_tags =============\n", guessed_tags, file=sys.stderr)
+                        # break
                         # get features
                         feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
                         # print(feats)
-                        guess = self.model.predict(feats)
+                        guess = self.model.predict(feats, depPOS)
 
                         e_tmp =[head, dep, guess]
                         E.append(e_tmp)
                         F[(head,dep)] = feats
                     if i >= 2:
                         for j in range(1,i):
+                            print((i,j), file=sys.stderr)
                             dep = j
                             head = i
                             token = trimed_sentence[j-1]
                             depWord = token[1]
-                            depPOS = token[3]
-
+                            ########## depPOS = token[3]
+                            
                             # head info
-                            h_token = trimed_sentence[i-1]
-                            headWord = h_token[1]
-                            headPOS = h_token[3]
+                            if i == 0:
+                                headWord = "ROOT"
+                                headPOS = "ROOT"
+                            else:
+                                h_token = trimed_sentence[i-1]
+                                headWord = h_token[1]
+                                headPOS = guessed_tags[head]
 
                             # prev retrieval
                             if j == 1:
                                 prev = "ROOT"
                                 prev2 = "START"
                             elif j == 2:
-                                prev = trimed_sentence[j-2][3]
+                                prev = guessed_tags[j-1]
                                 prev2 = "ROOT"
                             else:
-                                prev = trimed_sentence[j-2][3]
-                                prev2 = trimed_sentence[j-3][3]
+                                prev = guessed_tags[j-1]
+                                prev2 = guessed_tags[j-2]
 
+                            ########### depPOS
+                            depPOS = self.tagdict.get(depWord)
+                            # print("depPOS and word ==============\n", depPOS, depWord, file=sys.stderr)
+                            if not depPOS:
+                                depPOS = guessed_tags.setdefault(j, "current")
+                                # print("TAGdict =========Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                                if depPOS == "current":
+                                    fPOS = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                                    # print("fPOS =================================\n", fPOS, file=sys.stderr)
+                                    depPOS = self.model.POS_predict(fPOS)
+                                    # print("Guessed depPOS and word =============\n", depPOS, depWord, file=sys.stderr)
+                                    guessed_tags[dep] = depPOS
+                                    POS_feats[dep] = fPOS
+                            else:
+                                guessed_tags[dep] = depPOS
+                            # print("guessed_tags =============\n", guessed_tags, file=sys.stderr)
+                            # break
                             # get features
                             feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
                             # print(feats)
-                            guess = self.model.predict(feats)
+                            guess = self.model.predict(feats, depPOS)
 
                             e_tmp =[head, dep, guess]
                             E.append(e_tmp)
                             F[(head,dep)] = feats
-                # print("Gold V =================", file=sys.stderr)
-                # print(G_V, file=sys.stderr)
-                # print("Gold E =================", file=sys.stderr)
-                # print(G_E, file=sys.stderr)
-                # print("V ======================", file=sys.stderr)
-                # print(V, file=sys.stderr)
-                # print("E ======================", file=sys.stderr)
-                # print(E, file=sys.stderr)
-                # print("F =====================", file=sys.stderr)
-                # print(F, file=sys.stderr)
-                # print("==============================================================", file=sys.stderr)
-                # print("Maxspan", file=sys.stderr)
-                M = maxspan(V,E)
-                # print(M, file=sys.stderr)
+                            # break
+                            # dep = j
+                            # head = i
+                            # token = trimed_sentence[j-1]
+                            # depWord = token[1]
+                            # depPOS = token[3]
 
+                            # # head info
+                            # h_token = trimed_sentence[i-1]
+                            # headWord = h_token[1]
+                            # headPOS = h_token[3]
+
+                            # # prev retrieval
+                            # if j == 1:
+                            #     prev = "ROOT"
+                            #     prev2 = "START"
+                            # elif j == 2:
+                            #     prev = trimed_sentence[j-2][3]
+                            #     prev2 = "ROOT"
+                            # else:
+                            #     prev = trimed_sentence[j-2][3]
+                            #     prev2 = trimed_sentence[j-3][3]
+                            
+                            # # break
+
+                            # # get features
+                            # feats = self._get_features(self._normalise(depWord), prev, prev2, headPOS, self._normalise(headWord), depPOS, context, dep, head)
+                            # # print(feats)
+                            # guess = self.model.predict(feats)
+
+                            # e_tmp =[head, dep, guess]
+                            # E.append(e_tmp)
+                            # F[(head,dep)] = feats
+                print("Gold V =================", file=sys.stderr)
+                print(G_V, file=sys.stderr)
+                print("Gold E =================", file=sys.stderr)
+                print(G_E, file=sys.stderr)
+                print("V ======================", file=sys.stderr)
+                print(V, file=sys.stderr)
+                print("E ======================", file=sys.stderr)
+                print(E, file=sys.stderr)
+                print("F =====================", file=sys.stderr)
+                print(F, file=sys.stderr)
+                print("==============================================================", file=sys.stderr)
+                print("Maxspan", file=sys.stderr)
+                M = maxspan(V,E)
+                print(M, file=sys.stderr)
+
+                '''scores'''
                 # Caluculate the score for M
                 M_score = 0
                 for m in M:
                     if m in G_E:
                         c += 1
                     n += 1
-                    M_score += self.model.predict(F[m])
+                    # M_score += self.model.predict(F[m])
                 
                 # Calculate the score for G_E
-                G_score = 0
-                for g in G_E:
-                    G_score += self.model.predict(F[g])
+                # G_score = 0
+                # for g in G_E:
+                #     G_score += self.model.predict(F[g])
 
                 # print("M score ====================\n", M_score, file=sys.stderr)
                 # print("G score ====================\n", G_score, file=sys.stderr)
+                
 
                 # g_feat = []
                 # for g in G_E:
@@ -398,12 +566,17 @@ class PerceptronWeighter():
                 #         count += 1
                 # print("count ===================\n", count)
 
-                ###### update
-                # self.model.i += 1
+                '''update for POS'''
+                for k in POS_feats.keys():
+                    self.model.POS_update(tags[k-1],guessed_tags[k], POS_feats[k])
+                # print(self.model.weights)
+
+                ###### update for weighting
                 for k in GM_dep_feat.keys():
                     gold = GM_dep_feat[k][0]
                     guessed = GM_dep_feat[k][1]
-                    self.model.update(gold, guessed)
+                    # print(guessed_tags[k])
+                    self.model.update(gold, guessed, tags[k-1], guessed_tags[k])
                 # for m in M:
                 #     if m in G_E:
                 #         self.model.update(F[m], 1.0)
@@ -414,6 +587,7 @@ class PerceptronWeighter():
                 # for m in G_E:
                 #     if not (m in M):
                 #         self.model.update(F[m],1.0)
+            # break
                 
             random.shuffle(sentences)
             print()
@@ -423,57 +597,11 @@ class PerceptronWeighter():
         self.model.average_weights()
         # Pickle as a binary file
         if save_loc is not None:
-            pickle.dump((self.model.weights),
+            pickle.dump((self.model.weights, self.tagdict, self.classes),
                          open(save_loc, 'wb'), -1)
 
-
-                # prev, prev2 = self.START
-                # context = self.START + [self._normalise(w[1]) for w in sentence] + self.END
-                # tags = [w[3] for w in sentence]
-                # for i, token in enumerate(sentence):
-                #     print("token ==========")
-                #     print(token)
-                #     if "." in token[0]:
-                #         continue
-
-                #     word = token[1]
-                #     dependentPOS = token[3]
-                #     print(token)
-                #     head = int(token[6])
-                #     # print("head ============")
-                #     # print(head)
-                #     # print(sentence[head-1])
-                #     headPOS = sentence[head-1][3]
-                #     headW = sentence[head-1][1]
-
-                #     feats = self._get_features(i, word, context, prev, prev2, headPOS, headW, dependentPOS)
-                #     # print("feats ===========")
-                #     # print(feats)
-                #     guess = self.model.predict(feats)
-                #     # print("guess ===========")
-                #     # print(guess)
-                #     # Need to modify update function
-                #     self.model.update(feats)
-                #     # print("\nweights ============")
-                #     # print(self.model.weights)
-
-                #     prev2 = prev
-                #     prev = dependentPOS
-                #     c += guess == tags[i]
-                #     n += 1
-                # break
-            # break
         print("\nweights ============", file=sys.stderr)
         print(self.model.weights, file=sys.stderr)
-        #         print('\r', end='', file=sys.stderr)
-        #     random.shuffle(sentences)
-        #     print()
-        #     print("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)), file=sys.stderr)
-        # self.model.average_weights()
-        # # Pickle as a binary file
-        # if save_loc is not None:
-        #     pickle.dump((self.model.weights, self.tagdict, self.classes),
-        #                  open(save_loc, 'wb'), -1)
         return None
 
     def load(self, loc):
@@ -483,7 +611,8 @@ class PerceptronWeighter():
         except IOError:
             print("Missing " +loc+" file.")
             sys.exit(-1)
-        self.model.weights = w_td_c
+        self.model.weights, self.tagdict, self.classes = w_td_c
+        self.model.classes = self.classes
         return None
 
     def _normalise(self, word):
@@ -531,14 +660,14 @@ class PerceptronWeighter():
         # print(dep)
         # print("context ==========")
         # print(context)
-        # add('i word', context[dep])
-        # add('i-1 tag+i word', prev, context[dep])
-        # add('i-1 word', context[dep-1])
-        # add('i-1 suffix', context[dep-1][-3:])
-        # add('i-2 word', context[dep-2])
-        # add('i+1 word', context[dep+1])
-        # add('i+1 suffix', context[dep+1][-3:])
-        # add('i+2 word', context[dep+2])
+        add('i word', context[dep])
+        add('i-1 tag+i word', prev, context[dep])
+        add('i-1 word', context[dep-1])
+        add('i-1 suffix', context[dep-1][-3:])
+        add('i-2 word', context[dep-2])
+        add('i+1 word', context[dep+1])
+        add('i+1 suffix', context[dep+1][-3:])
+        add('i+2 word', context[dep+2])
         ##########  features for edge weighting
         add('head POS', headPOS)
         add("head word", headWord)
@@ -553,11 +682,11 @@ class PerceptronWeighter():
 
         #print(word, '|||', features)
         return features
-
+    
     def _make_tagdict(self, sentences):
         '''Make a tag dictionary for single-tag words.'''
         counts = defaultdict(lambda: defaultdict(int))
-#        for words, tags in sentences:
+        # for words, tags in sentences:
         for sentence in sentences:
             for token in sentence:
                 word = token[1]
@@ -573,6 +702,7 @@ class PerceptronWeighter():
             # Only add quite unambiguous words
             if n >= freq_thresh and (float(mode) / n) >= ambiguity_thresh:
                 self.tagdict[word] = tag
+
 
 ###############################################################################
 
@@ -594,7 +724,7 @@ def parser(corpus_file, model_file):
             sentence.append(tuple(token.strip().split('\t')))
         sentences.append(sentence)
 
-    t = PerceptronWeighter(model_file)
+    t = PerceptronWeighter(model_file, load=True)
     t.parse(sentences)
 
 def trainer(corpus_file, model_file):
@@ -617,7 +747,7 @@ def trainer(corpus_file, model_file):
         sentences.append(sentence)
     
     # print(sentences[0])
-    t.train(sentences, save_loc=model_file, nr_iter=20)
+    t.train(sentences, save_loc=model_file, nr_iter=10)
 
 if len(sys.argv) == 3 and sys.argv[1] == '-t':
     trainer(sys.stdin, sys.argv[2])    

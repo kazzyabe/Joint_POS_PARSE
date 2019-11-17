@@ -1,5 +1,6 @@
 conllu-perceptron-tagger
 UD_English-EWT
+evaluation_script
 *.log
 *.conllu
 *.dat
