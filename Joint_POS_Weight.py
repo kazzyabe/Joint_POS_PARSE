@@ -2,7 +2,7 @@ import sys
 
 sys.path.insert(0, "conllu-perceptron-tagger")
 sys.stderr = open("debugg.log", "w")
-sys.stdout = open("parsed.conllu", "w")
+sys.stdout = open("train.conllu", "w")
 # sys.stdout = open("feat.log", "w")
 
 import random
