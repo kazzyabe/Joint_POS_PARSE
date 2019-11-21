@@ -2,7 +2,7 @@ import sys
 
 sys.path.insert(0, "conllu-perceptron-tagger")
 sys.stderr = open("debugg.log", "w")
-sys.stdout = open("test.conllu", "w")
+sys.stdout = open("CtrainF.conllu", "w")
 # sys.stdout = open("feat.log", "w")
 
 import random
@@ -606,6 +606,12 @@ class PerceptronWeighter():
         add("head dep Word", headWord, depWord)
         add("|head - dep|", str(abs(head - dep)))
         add("dep - head", str(dep-head))
+        ######### additional
+        add('p-word, p-pos, c-word, c-pos', headWord, headPOS, depWord, depPOS)
+        add('p-pos, c-word, c-pos', headPOS, depWord,depPOS)
+        add('p-word, c-word, c-pos', headWord, depWord, depPOS)
+        add('p-word, p-pos, c-pos', headWord, headPOS, depPOS)
+        add('p-word, p-pos, c-word', headWord, headPOS, depWord)
 
         #print(word, '|||', features)
         return features
@@ -674,7 +680,7 @@ def trainer(corpus_file, model_file):
         sentences.append(sentence)
     
     # print(sentences[0])
-    t.train(sentences, save_loc=model_file, nr_iter=10)
+    t.train(sentences, save_loc=model_file, nr_iter=7)
 
 if len(sys.argv) == 3 and sys.argv[1] == '-t':
     trainer(sys.stdin, sys.argv[2])    

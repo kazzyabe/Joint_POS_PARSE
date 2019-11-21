@@ -1,6 +1,11 @@
 conllu-perceptron-tagger
 UD_English-EWT
 evaluation_script
+UD_Japanese-GSD
+UD_English-GUM
+UD_Italian-PoSTWITA
+UD_Urdu-UDTB
+UD_Chinese-GSD
 *.log
 *.conllu
 *.dat

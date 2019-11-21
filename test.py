@@ -2,11 +2,16 @@ from Joint_POS_Weight import *
 
 # corpus_file = open("UD_English-EWT/en_ewt-ud-dev.conllu", "r")
 # corpus_file = "testPOStagged.conllu"
-# corpus_file = "UD_English-EWT/en_ewt-ud-dev.conllu"
-corpus_file = "UD_English-EWT/en_ewt-ud-test.conllu"
-# trainer(corpus_file, "train.dat")
+# corpus_file = "UD_English-EWT/en_ewt-ud-train.conllu"
+# corpus_file = "UD_Japanese-GSD/ja_gsd-ud-train.conllu"
+# corpus_file = "UD_Japanese-GSD/ja_gsd-ud-test.conllu"
+# corpus_file = "UD_English-EWT/en_ewt-ud-test.conllu"
+# corpus_file = "UD_English-GUM/en_gum-ud-test.conllu"
+# corpus_file = "UD_Urdu-UDTB/ur_udtb-ud-train.conllu"
+corpus_file = "UD_Chinese-GSD/zh_gsd-ud-train.conllu"
+# trainer(corpus_file, "Chinese.dat")
 # parser(corpus_file, "Parser_train20mod2.dat")
-parser(corpus_file, "train.dat")
+parser(corpus_file, "Chinese.dat")
 
 
 
